@@ -1,5 +1,7 @@
+streamlit
 pandas
 jupyter==1.*
 plotly
 numpy
 requests
+pytest
