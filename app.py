@@ -20,6 +20,7 @@ filter_eastern = st.sidebar.checkbox("Filter to Eastern timezone only", value=Tr
 
 BASE_URL = "https://api.eia.gov/v2/electricity/rto/daily-fuel-type-data/data/"
 
+
 def fetch_all_pages(base_url: str, params: dict) -> list:
     all_rows = []
     offset = 0
@@ -38,6 +39,7 @@ def fetch_all_pages(base_url: str, params: dict) -> list:
 
     return all_rows
 
+
 @st.cache_data(show_spinner=False)
 def load_fuel_data(api_key: str, start: str, end: str) -> pd.DataFrame:
     params = {
@@ -53,6 +55,7 @@ def load_fuel_data(api_key: str, start: str, end: str) -> pd.DataFrame:
     }
     rows = fetch_all_pages(BASE_URL, params)
     return pd.json_normalize(rows)
+
 
 with st.spinner("Loading data..."):
     df = load_fuel_data(api_key, start, end)
@@ -76,8 +79,8 @@ if units == "GWh":
 # Aggregation by date and fuel type
 agg = (
     df.groupby(["period", "type-name"], as_index=False)[ycol]
-      .sum()
-      .rename(columns={ycol: "Demand"})
+    .sum()
+    .rename(columns={ycol: "Demand"})
 )
 
 # Keep top N fuel types by total

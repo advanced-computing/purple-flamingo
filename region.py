@@ -16,6 +16,7 @@ units = st.sidebar.radio("Units", ["MWh", "GWh"], horizontal=True)
 
 BASE_URL = "https://api.eia.gov/v2/electricity/rto/daily-region-data/data/"
 
+
 def fetch_all_pages(base_url: str, params: dict) -> list:
     # Pagination
     all_rows = []
@@ -35,6 +36,7 @@ def fetch_all_pages(base_url: str, params: dict) -> list:
 
     return all_rows
 
+
 @st.cache_data(show_spinner=False)
 def load_region_data(api_key: str, start: str, end: str) -> pd.DataFrame:
     params = {
@@ -52,6 +54,7 @@ def load_region_data(api_key: str, start: str, end: str) -> pd.DataFrame:
     df = pd.json_normalize(rows)
     return df
 
+
 with st.spinner("Loading data from EIA..."):
     df = load_region_data(api_key, start, end)
 
@@ -62,7 +65,7 @@ if df.empty:
 df["period"] = pd.to_datetime(df["period"], errors="coerce")
 df["value"] = pd.to_numeric(df["value"], errors="coerce")
 
-# Fix to Eastern Time 
+# Fix to Eastern Time
 if "timezone" in df.columns:
     df = df[df["timezone"].str.lower().eq("eastern")]
 
@@ -75,7 +78,11 @@ if units == "GWh":
     ylabel = "Demand (GWh)"
 
 # Choose region label
-region_col = "region-name" if "region-name" in df.columns else ("region" if "region" in df.columns else None)
+region_col = (
+    "region-name"
+    if "region-name" in df.columns
+    else ("region" if "region" in df.columns else None)
+)
 
 # Plot Graph
 top10 = df.groupby("respondent")["value"].sum().nlargest(10).index
