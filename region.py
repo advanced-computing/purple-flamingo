@@ -7,7 +7,7 @@ from data_utils import (
     parse_period_and_value,
     top_n_by_total,
 )
-#from eia_api import fetch_all_pages
+# from eia_api import fetch_all_pages
 
 st.set_page_config(page_title="EIA Demand by Region (ET)", layout="wide")
 st.title("U.S. Electricity Demand by Region (Eastern Time)")
