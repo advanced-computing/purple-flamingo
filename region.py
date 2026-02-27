@@ -2,7 +2,12 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-from data_utils import convert_units, filter_to_timezone, parse_period_and_value, top_n_by_total
+from data_utils import (
+    convert_units,
+    filter_to_timezone,
+    parse_period_and_value,
+    top_n_by_total,
+)
 from eia_api import fetch_all_pages
 
 st.set_page_config(page_title="EIA Demand by Region (ET)", layout="wide")

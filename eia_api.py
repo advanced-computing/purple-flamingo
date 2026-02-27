@@ -3,7 +3,9 @@ from typing import Any
 import requests
 
 
-def fetch_all_pages(base_url: str, params: dict[str, Any], timeout: int = 60) -> list[dict[str, Any]]:
+def fetch_all_pages(
+    base_url: str, params: dict[str, Any], timeout: int = 60
+) -> list[dict[str, Any]]:
     all_rows: list[dict[str, Any]] = []
     offset = 0
     length = params.get("length", 5000)
