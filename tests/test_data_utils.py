@@ -1,6 +1,11 @@
 import pandas as pd
 
-from data_utils import convert_units, filter_to_timezone, parse_period_and_value, top_n_by_total
+from data_utils import (
+    convert_units,
+    filter_to_timezone,
+    parse_period_and_value,
+    top_n_by_total,
+)
 
 
 def test_convert_units_to_gwh_creates_scaled_column():
@@ -49,7 +54,9 @@ def test_top_n_by_total_keeps_only_largest_categories():
 
 
 def test_parse_period_and_value_converts_types():
-    df = pd.DataFrame({"period": ["2026-02-01", "not-a-date"], "value": ["12.5", "oops"]})
+    df = pd.DataFrame(
+        {"period": ["2026-02-01", "not-a-date"], "value": ["12.5", "oops"]}
+    )
     parsed = parse_period_and_value(df)
     assert parsed["period"].notna().sum() == 1
     assert parsed["value"].tolist()[0] == 12.5

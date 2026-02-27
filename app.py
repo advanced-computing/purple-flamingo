@@ -1,9 +1,7 @@
 import streamlit as st
 import pandas as pd
+import requests
 import plotly.express as px
-
-from data_utils import convert_units, parse_period_and_value, top_n_by_total
-from eia_api import fetch_all_pages
 
 st.set_page_config(page_title="EIA Fuel Type Demand", layout="wide")
 st.title("U.S. Electricity Demand by Fuel Type (Eastern Time)")
@@ -22,6 +20,26 @@ filter_eastern = st.sidebar.checkbox("Filter to Eastern timezone only", value=Tr
 
 BASE_URL = "https://api.eia.gov/v2/electricity/rto/daily-fuel-type-data/data/"
 
+
+def fetch_all_pages(base_url: str, params: dict) -> list:
+    all_rows = []
+    offset = 0
+    length = params.get("length", 5000)
+
+    while True:
+        params["offset"] = offset
+        r = requests.get(base_url, params=params, timeout=60)
+        r.raise_for_status()
+        payload = r.json()
+        rows = payload.get("response", {}).get("data", [])
+        all_rows.extend(rows)
+        if len(rows) < length:
+            break
+        offset += length
+
+    return all_rows
+
+
 @st.cache_data(show_spinner=False)
 def load_fuel_data(api_key: str, start: str, end: str) -> pd.DataFrame:
     params = {
@@ -38,6 +56,7 @@ def load_fuel_data(api_key: str, start: str, end: str) -> pd.DataFrame:
     rows = fetch_all_pages(BASE_URL, params)
     return pd.json_normalize(rows)
 
+
 with st.spinner("Loading data..."):
     df = load_fuel_data(api_key, start, end)
 
@@ -45,18 +64,28 @@ if df.empty:
     st.warning("No data returned. Check dates/API key.")
     st.stop()
 
-df = parse_period_and_value(df)
-df, ycol, ylabel = convert_units(df, units)
+# Ignoring Na values
+df["period"] = pd.to_datetime(df["period"], errors="coerce")
+df["value"] = pd.to_numeric(df["value"], errors="coerce")
+
+# Convert units
+ycol = "value"
+ylabel = "Demand (MWh)"
+if units == "GWh":
+    df["value_gwh"] = df["value"] / 1000.0
+    ycol = "value_gwh"
+    ylabel = "Demand (GWh)"
 
 # Aggregation by date and fuel type
 agg = (
     df.groupby(["period", "type-name"], as_index=False)[ycol]
-      .sum()
-      .rename(columns={ycol: "Demand"})
-) # type: ignore
+    .sum()
+    .rename(columns={ycol: "Demand"})
+)
 
 # Keep top N fuel types by total
-agg = top_n_by_total(agg, "type-name", "Demand", top_n=top_n)
+top_fuels = agg.groupby("type-name")["Demand"].sum().nlargest(top_n).index
+agg = agg[agg["type-name"].isin(top_fuels)].copy()
 
 # Plot Graph
 fig = px.line(
