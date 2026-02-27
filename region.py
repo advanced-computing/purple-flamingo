@@ -1,7 +1,9 @@
 import streamlit as st
 import pandas as pd
-import requests
 import plotly.express as px
+
+from data_utils import convert_units, filter_to_timezone, parse_period_and_value, top_n_by_total
+from eia_api import fetch_all_pages
 
 st.set_page_config(page_title="EIA Demand by Region (ET)", layout="wide")
 st.title("U.S. Electricity Demand by Region (Eastern Time)")
@@ -62,8 +64,7 @@ if df.empty:
     st.warning("No data returned. Double-check your dates and API key.")
     st.stop()
 
-df["period"] = pd.to_datetime(df["period"], errors="coerce")
-df["value"] = pd.to_numeric(df["value"], errors="coerce")
+df = parse_period_and_value(df)
 
 # Fix to Eastern Time
 if "timezone" in df.columns:
@@ -85,8 +86,7 @@ region_col = (
 )
 
 # Plot Graph
-top10 = df.groupby("respondent")["value"].sum().nlargest(10).index
-df = df[df["respondent"].isin(top10)].copy()
+df = top_n_by_total(df, "respondent", "value", top_n=10)
 region_col = "respondent"
 
 fig = px.line(
