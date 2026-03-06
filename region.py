@@ -58,7 +58,9 @@ if df.empty:
     st.stop()
 
 df = parse_period_and_value(df)
-df, parsed_warnings = validate_parsed(df, required_columns=["period", "value", "respondent"])
+df, parsed_warnings = validate_parsed(
+    df, required_columns=["period", "value", "respondent"]
+)
 for warning in parsed_warnings:
     st.warning(warning)
 
