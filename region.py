@@ -20,27 +20,27 @@ start = st.sidebar.text_input("Start date (YYYY-MM-DD)", value="2026-02-09")
 end = st.sidebar.text_input("End date (YYYY-MM-DD)", value="2026-02-16")
 units = st.sidebar.radio("Units", ["MWh", "GWh"], horizontal=True)
 
+from data_utils import (
+    convert_units,
+    filter_to_timezone,
+    parse_period_and_value,
+    top_n_by_total,
+)
+from eia_api import fetch_all_pages
+from schemas import validate_parsed, validate_region_raw
+
+st.set_page_config(page_title="EIA Demand by Region (ET)", layout="wide")
+st.title("U.S. Electricity Demand by Region (Eastern Time)")
+
+# API Key Retrieval
+api_key = st.secrets.get("EIA_API_KEY", None)
+
+# Predefine time and unit values
+start = st.sidebar.text_input("Start date (YYYY-MM-DD)", value="2026-02-09")
+end = st.sidebar.text_input("End date (YYYY-MM-DD)", value="2026-02-16")
+units = st.sidebar.radio("Units", ["MWh", "GWh"], horizontal=True)
+
 BASE_URL = "https://api.eia.gov/v2/electricity/rto/daily-region-data/data/"
-
-
-def fetch_all_pages(base_url: str, params: dict) -> list:
-    # Pagination
-    all_rows = []
-    offset = 0
-    length = params.get("length", 5000)
-
-    while True:
-        params["offset"] = offset
-        r = requests.get(base_url, params=params, timeout=60)
-        r.raise_for_status()
-        payload = r.json()
-        rows = payload.get("response", {}).get("data", [])
-        all_rows.extend(rows)
-        if len(rows) < length:
-            break
-        offset += length
-
-    return all_rows
 
 
 @st.cache_data(show_spinner=False)
@@ -68,26 +68,27 @@ if df.empty:
     st.warning("No data returned. Double-check your dates and API key.")
     st.stop()
 
+df, raw_warnings = validate_region_raw(df)
+for warning in raw_warnings:
+    st.warning(warning)
+
+if df.empty:
+    st.warning("No usable rows after raw data validation.")
+    st.stop()
+
 df = parse_period_and_value(df)
+df, parsed_warnings = validate_parsed(df, required_columns=["period", "value", "respondent"])
+for warning in parsed_warnings:
+    st.warning(warning)
 
 # Fix to Eastern Time
-if "timezone" in df.columns:
-    df = df[df["timezone"].str.lower().eq("eastern")]
+df = filter_to_timezone(df, "eastern")
 
-# Convert units if needed
-ycol = "value"
-ylabel = "Demand (MWh)"
-if units == "GWh":
-    df["value_gwh"] = df["value"] / 1000.0
-    ycol = "value_gwh"
-    ylabel = "Demand (GWh)"
+if df.empty:
+    st.warning("No usable rows after cleaning and filtering.")
+    st.stop()
 
-# Choose region label
-region_col = (
-    "region-name"
-    if "region-name" in df.columns
-    else ("region" if "region" in df.columns else None)
-)
+df, ycol, ylabel = convert_units(df, units)
 
 # Plot Graph
 df = top_n_by_total(df, "respondent", "value", top_n=10)

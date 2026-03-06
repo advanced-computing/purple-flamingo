@@ -5,4 +5,4 @@ plotly
 numpy
 requests
 pytest
-pytest-cov
+pandera[pandas]
