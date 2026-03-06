@@ -93,7 +93,9 @@ def validate_region_raw(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     )
 
 
-def validate_parsed(df: pd.DataFrame, required_columns: Iterable[str]) -> tuple[pd.DataFrame, list[str]]:
+def validate_parsed(
+    df: pd.DataFrame, required_columns: Iterable[str]
+) -> tuple[pd.DataFrame, list[str]]:
     return _validate_and_clean(
         df=df,
         schema=PARSED_SCHEMA,

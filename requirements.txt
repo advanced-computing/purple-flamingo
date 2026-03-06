@@ -6,3 +6,5 @@ numpy
 requests
 pytest
 pandera[pandas]
+
+pytest-cov

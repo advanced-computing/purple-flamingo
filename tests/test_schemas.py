@@ -43,7 +43,9 @@ def test_validate_parsed_drops_invalid_rows_and_warns():
             "type-name": ["coal", "gas"],
         }
     )
-    cleaned, warnings = validate_parsed(raw, required_columns=["period", "value", "type-name"])
+    cleaned, warnings = validate_parsed(
+        raw, required_columns=["period", "value", "type-name"]
+    )
     assert len(cleaned) == 1
     assert cleaned["type-name"].tolist() == ["coal"]
     assert any("dropped" in warning for warning in warnings)
