@@ -9,6 +9,7 @@ from data_utils import (
     top_n_by_total,
 )
 from eia_api import fetch_all_pages
+from schemas import validate_parsed, validate_region_raw
 
 st.set_page_config(page_title="EIA Demand by Region (ET)", layout="wide")
 st.title("U.S. Electricity Demand by Region (Eastern Time)")
@@ -49,10 +50,25 @@ if df.empty:
     st.warning("No data returned. Double-check your dates and API key.")
     st.stop()
 
+df, raw_warnings = validate_region_raw(df)
+for warning in raw_warnings:
+    st.warning(warning)
+
+if df.empty:
+    st.warning("No usable rows after raw data validation.")
+    st.stop()
+
 df = parse_period_and_value(df)
+df, parsed_warnings = validate_parsed(df, required_columns=["period", "value", "respondent"])
+for warning in parsed_warnings:
+    st.warning(warning)
 
 # Fix to Eastern Time
 df = filter_to_timezone(df, "eastern")
+
+if df.empty:
+    st.warning("No usable rows after cleaning and filtering.")
+    st.stop()
 
 df, ycol, ylabel = convert_units(df, units)
 

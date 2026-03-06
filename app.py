@@ -2,8 +2,14 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-from data_utils import convert_units, parse_period_and_value, top_n_by_total
+from data_utils import (
+    convert_units,
+    filter_to_timezone,
+    parse_period_and_value,
+    top_n_by_total,
+)
 from eia_api import fetch_all_pages
+from schemas import validate_fuel_raw, validate_parsed
 
 st.set_page_config(page_title="EIA Fuel Type Demand", layout="wide")
 st.title("U.S. Electricity Demand by Fuel Type (Eastern Time)")
@@ -47,7 +53,26 @@ if df.empty:
     st.warning("No data returned. Check dates/API key.")
     st.stop()
 
+df, raw_warnings = validate_fuel_raw(df)
+for warning in raw_warnings:
+    st.warning(warning)
+
+if df.empty:
+    st.warning("No usable rows after raw data validation.")
+    st.stop()
+
 df = parse_period_and_value(df)
+df, parsed_warnings = validate_parsed(df, required_columns=["period", "value", "type-name"])
+for warning in parsed_warnings:
+    st.warning(warning)
+
+if filter_eastern:
+    df = filter_to_timezone(df, "eastern")
+
+if df.empty:
+    st.warning("No usable rows after cleaning and filtering.")
+    st.stop()
+
 df, ycol, ylabel = convert_units(df, units)
 
 # Aggregation by date and fuel type
