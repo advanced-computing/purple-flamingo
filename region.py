@@ -1,24 +1,6 @@
-import streamlit as st
 import pandas as pd
 import plotly.express as px
-import requests
-
-from data_utils import (
-    parse_period_and_value,
-    top_n_by_total,
-)
-# from eia_api import fetch_all_pages
-
-st.set_page_config(page_title="EIA Demand by Region (ET)", layout="wide")
-st.title("U.S. Electricity Demand by Region (Eastern Time)")
-
-# API Key Retrieval
-api_key = st.secrets.get("EIA_API_KEY", None)
-
-# Predefine time and unit values
-start = st.sidebar.text_input("Start date (YYYY-MM-DD)", value="2026-02-09")
-end = st.sidebar.text_input("End date (YYYY-MM-DD)", value="2026-02-16")
-units = st.sidebar.radio("Units", ["MWh", "GWh"], horizontal=True)
+import streamlit as st
 
 from data_utils import (
     convert_units,
@@ -57,8 +39,7 @@ def load_region_data(api_key: str, start: str, end: str) -> pd.DataFrame:
         "length": 5000,
     }
     rows = fetch_all_pages(BASE_URL, params)
-    df = pd.json_normalize(rows)
-    return df
+    return pd.json_normalize(rows)
 
 
 with st.spinner("Loading data from EIA..."):
