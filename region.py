@@ -13,6 +13,7 @@ from schemas import validate_parsed, validate_region_raw
 
 st.set_page_config(page_title="EIA Demand by Region (ET)", layout="wide")
 st.title("U.S. Electricity Demand by Region (Eastern Time)")
+st.markdown("**Team:** Aileen Yang · Aria Kovalovich · Chengpu Deng")
 
 # API Key Retrieval
 api_key = st.secrets.get("EIA_API_KEY", None)
