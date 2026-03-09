@@ -1,5 +1,9 @@
 # Purple Flamingo: EIA Grid Demand Dashboard
 
+<a target="_blank" href="https://colab.research.google.com/github/advanced-computing/purple-flamingo">
+  <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
+</a>
+
 Streamlit dashboard for exploring U.S. electricity demand data from the U.S. Energy Information Administration (EIA).
 
 ## Data Source
