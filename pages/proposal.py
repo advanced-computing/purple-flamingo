@@ -5,7 +5,7 @@ st.set_page_config(page_title="Project Proposal & Reflection", layout="wide")
 st.title("Project Proposal, Feedback, and Reflections")
 
 st.markdown(
-"""
+    """
 This page documents the evolution of our project proposal, including reflections
 after initial implementation and feedback from the teaching team.
 """
