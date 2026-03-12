@@ -36,6 +36,67 @@ PARSED_SCHEMA = pa.DataFrameSchema(
     strict=False,
 )
 
+DAILY_TOTALS_SCHEMA = pa.DataFrameSchema(
+    {
+        "period": pa.Column(pa.DateTime, nullable=False),
+        "total_demand": pa.Column(
+            float, nullable=False, coerce=True, checks=pa.Check.ge(0)
+        ),
+    },
+    strict=False,
+)
+
+ANOMALY_SCHEMA = pa.DataFrameSchema(
+    {
+        "period": pa.Column(pa.DateTime, nullable=False),
+        "total_demand": pa.Column(float, nullable=False, coerce=True),
+        "demand_zscore": pa.Column(float, nullable=False, coerce=True),
+        "anomaly_type": pa.Column(
+            str, nullable=True, checks=pa.Check.isin(["high", "low"])
+        ),
+    },
+    strict=False,
+)
+
+DAY_OVER_DAY_SCHEMA = pa.DataFrameSchema(
+    {
+        "period": pa.Column(pa.DateTime, nullable=False),
+        "total_demand": pa.Column(float, nullable=False, coerce=True),
+        "demand_change": pa.Column(float, nullable=True, coerce=True),
+        "demand_pct_change": pa.Column(float, nullable=True, coerce=True),
+    },
+    strict=False,
+)
+
+FUEL_SHARE_SCHEMA = pa.DataFrameSchema(
+    {
+        "period": pa.Column(pa.DateTime, nullable=False),
+        "type-name": pa.Column(str, nullable=False),
+        "value": pa.Column(float, nullable=False, coerce=True),
+        "share_pct": pa.Column(
+            float,
+            nullable=False,
+            coerce=True,
+            checks=[pa.Check.ge(0), pa.Check.le(100)],
+        ),
+    },
+    strict=False,
+)
+
+MIX_COMPARISON_SCHEMA = pa.DataFrameSchema(
+    {
+        "day_type": pa.Column(str, nullable=False),
+        "type-name": pa.Column(str, nullable=False),
+        "avg_share_pct": pa.Column(
+            float,
+            nullable=False,
+            coerce=True,
+            checks=[pa.Check.ge(0), pa.Check.le(100)],
+        ),
+    },
+    strict=False,
+)
+
 
 def _failure_preview(exc: pa.errors.SchemaErrors, limit: int = 5) -> str:
     failures = exc.failure_cases
@@ -101,4 +162,54 @@ def validate_parsed(
         schema=PARSED_SCHEMA,
         schema_name="Parsed schema",
         required_columns=required_columns,
+    )
+
+
+def validate_daily_totals(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    return _validate_and_clean(
+        df=df,
+        schema=DAILY_TOTALS_SCHEMA,
+        schema_name="Daily totals schema",
+        required_columns=["period", "total_demand"],
+    )
+
+
+def validate_anomaly(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    return _validate_and_clean(
+        df=df,
+        schema=ANOMALY_SCHEMA,
+        schema_name="Anomaly schema",
+        required_columns=["period", "total_demand", "demand_zscore", "anomaly_type"],
+    )
+
+
+def validate_day_over_day(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    return _validate_and_clean(
+        df=df,
+        schema=DAY_OVER_DAY_SCHEMA,
+        schema_name="Day-over-day schema",
+        required_columns=[
+            "period",
+            "total_demand",
+            "demand_change",
+            "demand_pct_change",
+        ],
+    )
+
+
+def validate_fuel_share(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    return _validate_and_clean(
+        df=df,
+        schema=FUEL_SHARE_SCHEMA,
+        schema_name="Fuel share schema",
+        required_columns=["period", "type-name", "value", "share_pct"],
+    )
+
+
+def validate_mix_comparison(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    return _validate_and_clean(
+        df=df,
+        schema=MIX_COMPARISON_SCHEMA,
+        schema_name="Mix comparison schema",
+        required_columns=["day_type", "type-name", "avg_share_pct"],
     )
