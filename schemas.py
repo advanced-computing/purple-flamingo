@@ -39,7 +39,9 @@ PARSED_SCHEMA = pa.DataFrameSchema(
 DAILY_TOTALS_SCHEMA = pa.DataFrameSchema(
     {
         "period": pa.Column(pa.DateTime, nullable=False),
-        "total_demand": pa.Column(float, nullable=False, coerce=True, checks=pa.Check.ge(0)),
+        "total_demand": pa.Column(
+            float, nullable=False, coerce=True, checks=pa.Check.ge(0)
+        ),
     },
     strict=False,
 )
@@ -49,7 +51,9 @@ ANOMALY_SCHEMA = pa.DataFrameSchema(
         "period": pa.Column(pa.DateTime, nullable=False),
         "total_demand": pa.Column(float, nullable=False, coerce=True),
         "demand_zscore": pa.Column(float, nullable=False, coerce=True),
-        "anomaly_type": pa.Column(str, nullable=True, checks=pa.Check.isin(["high", "low"])),
+        "anomaly_type": pa.Column(
+            str, nullable=True, checks=pa.Check.isin(["high", "low"])
+        ),
     },
     strict=False,
 )
@@ -70,7 +74,9 @@ FUEL_SHARE_SCHEMA = pa.DataFrameSchema(
         "type-name": pa.Column(str, nullable=False),
         "value": pa.Column(float, nullable=False, coerce=True),
         "share_pct": pa.Column(
-            float, nullable=False, coerce=True,
+            float,
+            nullable=False,
+            coerce=True,
             checks=[pa.Check.ge(0), pa.Check.le(100)],
         ),
     },
@@ -82,12 +88,15 @@ MIX_COMPARISON_SCHEMA = pa.DataFrameSchema(
         "day_type": pa.Column(str, nullable=False),
         "type-name": pa.Column(str, nullable=False),
         "avg_share_pct": pa.Column(
-            float, nullable=False, coerce=True,
+            float,
+            nullable=False,
+            coerce=True,
             checks=[pa.Check.ge(0), pa.Check.le(100)],
         ),
     },
     strict=False,
 )
+
 
 def _failure_preview(exc: pa.errors.SchemaErrors, limit: int = 5) -> str:
     failures = exc.failure_cases
@@ -155,6 +164,7 @@ def validate_parsed(
         required_columns=required_columns,
     )
 
+
 def validate_daily_totals(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     return _validate_and_clean(
         df=df,
@@ -178,7 +188,12 @@ def validate_day_over_day(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
         df=df,
         schema=DAY_OVER_DAY_SCHEMA,
         schema_name="Day-over-day schema",
-        required_columns=["period", "total_demand", "demand_change", "demand_pct_change"],
+        required_columns=[
+            "period",
+            "total_demand",
+            "demand_change",
+            "demand_pct_change",
+        ],
     )
 
 
