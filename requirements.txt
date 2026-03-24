@@ -1,24 +1,17 @@
 streamlit
-
 pandas
 pandera[pandas]
-
 jupyter==1.*
 numpy
-
 requests
-
 pytest
 pytest-cov
 
-pandas_gbp
-google.api_core.exceptions
-google.cloud
+pandas-gbq
+google-api-core
 google-cloud-bigquery
 
 plotly
-plotly.graph_objects
-
 pyarrow
 db-dtypes
 tqdm
