@@ -91,7 +91,7 @@ if df.empty:
 
 df = parse_period_and_value(df)
 df, parsed_warnings = validate_parsed(
-    df, required_columns=["period", "value", "type-name"]
+    df, required_columns=["period", "value", "type_name"]
 )
 for warning in parsed_warnings:
     st.warning(warning)
@@ -109,13 +109,13 @@ df, ycol, ylabel = convert_units(df, units)
 # Aggregation by date and fuel type
 # -------------------
 agg = (
-    df.groupby(["period", "type-name"], as_index=False)[ycol]
+    df.groupby(["period", "type_name"], as_index=False)[ycol]
     .sum()
     .rename(columns={ycol: "Demand"})
 )
 
 # Keep top N fuel types by total
-agg = top_n_by_total(agg, "type-name", "Demand", top_n=top_n)
+agg = top_n_by_total(agg, "type_name", "Demand", top_n=top_n)
 
 # -------------------
 # Plot Graph (Main Demand)
@@ -128,9 +128,9 @@ if chart_type == "Stacked Area":
         agg_sorted,
         x="period",
         y="Demand",
-        color="type-name",
+        color="type_name",
         title=f"Electricity demand by fuel type — stacked area ({start} to {end})",
-        labels={"period": "Date", "Demand": ylabel, "type-name": "Fuel type"},
+        labels={"period": "Date", "Demand": ylabel, "type_name": "Fuel type"},
     )
     fig.update_traces(mode="lines")
 else:
@@ -138,9 +138,9 @@ else:
         agg_sorted,
         x="period",
         y="Demand",
-        color="type-name",
+        color="type_name",
         title=f"Electricity demand by fuel type ({start} to {end})",
-        labels={"period": "Date", "Demand": ylabel, "type-name": "Fuel type"},
+        labels={"period": "Date", "Demand": ylabel, "type_name": "Fuel type"},
     )
 
 fig.update_layout(
@@ -259,7 +259,7 @@ st.markdown(
 mix_comparison = fuel_mix_on_anomaly_days(
     df,
     daily,
-    fuel_col="type-name",
+    fuel_col="type_name",
     value_col=ycol,
     anomaly_type="high" if anomaly_focus == "high_demand" else "low",
 )
@@ -271,20 +271,20 @@ if mix_comparison.empty:
 else:
     shifts = largest_fuel_shifts(
         mix_comparison,
-        fuel_col="type-name",
+        fuel_col="type_name",
         anomaly_label="high_demand" if anomaly_focus == "high_demand" else "low_demand",
     )
 
     label = "High" if anomaly_focus == "high_demand" else "Low"
     fig4 = px.bar(
         mix_comparison,
-        x="type-name",
+        x="type_name",
         y="avg_share_pct",
         color="day_type",
         barmode="group",
         title=f"Avg fuel share (%) — {label}-demand days vs normal",
         labels={
-            "type-name": "Fuel type",
+            "type_name": "Fuel type",
             "avg_share_pct": "Avg share (%)",
             "day_type": "Day type",
         },
@@ -300,10 +300,10 @@ else:
     if not shifts.empty and "shift_pct" in shifts.columns:
         fig5 = px.bar(
             shifts,
-            x="type-name",
+            x="type_name",
             y="shift_pct",
             title=f"Fuel mix shift: {label}-demand days minus normal (percentage points)",
-            labels={"type-name": "Fuel type", "shift_pct": "Shift (pp)"},
+            labels={"type_name": "Fuel type", "shift_pct": "Shift (pp)"},
             color="shift_pct",
             color_continuous_scale=["blue", "lightgrey", "red"],
             color_continuous_midpoint=0,
