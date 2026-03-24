@@ -203,6 +203,9 @@ poetry.toml
 # ruff
 .ruff_cache/
 
+# secrets.toml
+.streamlit/secrets.toml
+
 # LSP config files
 pyrightconfig.json
 
