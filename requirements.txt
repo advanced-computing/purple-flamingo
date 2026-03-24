@@ -11,8 +11,6 @@ requests
 pytest
 pytest-cov
 
-os
-
 pandas_gbp
 google.api_core.exceptions
 google.cloud
@@ -24,3 +22,4 @@ plotly.graph_objects
 pyarrow
 db-dtypes
 tqdm
+ruff
