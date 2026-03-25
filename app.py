@@ -90,6 +90,8 @@ if df.empty:
     st.stop()
 
 df = parse_period_and_value(df)
+df = df.rename(columns={"type-name": "type_name"})
+
 df, parsed_warnings = validate_parsed(
     df, required_columns=["period", "value", "type_name"]
 )
@@ -256,6 +258,7 @@ st.markdown(
 )
 
 # Re-use df with original value col for shares
+df_for_mix = df.rename(columns={"type_name": "type-name"})
 mix_comparison = fuel_mix_on_anomaly_days(
     df,
     daily,
