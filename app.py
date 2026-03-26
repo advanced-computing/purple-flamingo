@@ -2,7 +2,9 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
+from google.api_core.exceptions import GoogleAPIError
 
+from bigquery_utils import get_bigquery_client, get_bigquery_config, read_fuel_data
 from data_utils import (
     compute_daily_totals,
     convert_units,
@@ -14,22 +16,12 @@ from data_utils import (
     parse_period_and_value,
     top_n_by_total,
 )
-from eia_api import fetch_daily_fuel
 from schemas import validate_fuel_raw, validate_parsed
 
 st.set_page_config(page_title="EIA Fuel Type Demand", layout="wide")
 st.title("U.S. Electricity Demand by Fuel Type")
-st.caption("Data: U.S. Energy Information Administration (EIA) — Eastern Time")
+st.caption("Data: U.S. Energy Information Administration (EIA), served from BigQuery")
 st.markdown("**Team:** Aileen Yang · Aria Kovalovich · Chengpu Deng")
-
-# -------------------
-# API Key Retrieval
-# -------------------
-api_key = st.secrets.get("EIA_API_KEY", None)
-# BASE_URL = "https://api.eia.gov/v2/electricity/rto/daily-fuel-type-data/data/"
-if not api_key:
-    st.error("Missing EIA_API_KEY in Streamlit secrets.")
-    st.stop()
 
 # -------------------
 # Sidebar Control
@@ -69,17 +61,42 @@ with st.sidebar:
 # Data Loading
 # -------------------
 @st.cache_data(show_spinner=False)
-def load_fuel_data(api_key: str, start: str, end: str) -> pd.DataFrame:
-    rows = fetch_daily_fuel(api_key, start, end)
-    return pd.json_normalize(rows)
+def load_fuel_data(start: str, end: str) -> pd.DataFrame:
+    client = get_bigquery_client(st.secrets)
+    config = get_bigquery_config(st.secrets)
+    return read_fuel_data(
+        client=client,
+        project_id=config["project_id"],
+        dataset_id=config["dataset_id"],
+        table_id=config["fuel_table_id"],
+        start=start,
+        end=end,
+    )
 
 
-with st.spinner("Loading data from EIA..."):
-    df_raw = load_fuel_data(api_key, start, end)
+try:
+    with st.spinner("Loading data from BigQuery..."):
+        df_raw = load_fuel_data(start, end)
+except ValueError as exc:
+    st.error(str(exc))
+    st.stop()
+except GoogleAPIError as exc:
+    st.error(f"BigQuery request failed: {exc}")
+    st.stop()
 
 if df_raw.empty:
-    st.warning("No data returned. Check API key.")
+    st.warning("No rows returned from BigQuery for the selected date range.")
     st.stop()
+
+df_raw = df_raw.rename(
+    columns={
+        "respondent_name": "respondent-name",
+        "type_name": "type-name",
+        "value_units": "value-units",
+    }
+)
+df_raw["period"] = df_raw["period"].astype(str)
+df_raw["value"] = df_raw["value"].astype(str)
 
 df, raw_warnings = validate_fuel_raw(df_raw)
 for warning in raw_warnings:
