@@ -26,6 +26,8 @@ Streamlit dashboard for exploring U.S. electricity demand data from the U.S. Ene
 3. Configure Streamlit secrets for BigQuery access:
    ```toml
    # .streamlit/secrets.toml
+   EIA_API_KEY = "LTIKgNRTzB9PyNmYCHTfG8sr3A4h2E1RH6O9Swfi"
+
    [gcp_service_account]
    type = "service_account"
    project_id = "sipa-adv-c-purple-flamingo"
@@ -40,7 +42,7 @@ Streamlit dashboard for exploring U.S. electricity demand data from the U.S. Ene
    dataset_id = "eia_data"
    fuel_table_id = "daily_fuel_main"
    ```
-   You can copy the starter template from `.streamlit/secrets.example.toml`.
+   
 4. If you will run the load script locally, authenticate your user account first:
    ```bash
    gcloud auth application-default login
