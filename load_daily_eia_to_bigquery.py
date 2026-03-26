@@ -18,6 +18,7 @@ DATASET_ID = "eia_data"
 
 FUEL_TABLE_ID = "daily_fuel_main"
 REGION_TABLE_ID = "daily_region_main"
+DATA_SOURCE = os.getenv("EIA_DATA_SOURCE", "fuel").lower()
 
 LOOKBACK_DAYS = 90
 
@@ -47,6 +48,23 @@ def ensure_dataset_exists(
     except NotFound:
         client.create_dataset(dataset_ref)
         print(f"Created dataset: {project_id}.{dataset_id}")
+
+
+def ensure_table_exists(
+    client: bigquery.Client,
+    project_id: str,
+    dataset_id: str,
+    table_id: str,
+    schema: list[bigquery.SchemaField],
+) -> None:
+    table_ref = f"{project_id}.{dataset_id}.{table_id}"
+    try:
+        client.get_table(table_ref)
+        print(f"Table already exists: {table_ref}")
+    except NotFound:
+        table = bigquery.Table(table_ref, schema=schema)
+        client.create_table(table)
+        print(f"Created table: {table_ref}")
 
 
 def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -166,6 +184,29 @@ def load_table(
     print(f"Uploaded {len(df)} rows to {project_id}.{destination_table}")
 
 
+FUEL_TABLE_SCHEMA = [
+    bigquery.SchemaField("period", "DATE"),
+    bigquery.SchemaField("respondent", "STRING"),
+    bigquery.SchemaField("respondent_name", "STRING"),
+    bigquery.SchemaField("type", "STRING"),
+    bigquery.SchemaField("type_name", "STRING"),
+    bigquery.SchemaField("timezone", "STRING"),
+    bigquery.SchemaField("value", "FLOAT"),
+    bigquery.SchemaField("value_units", "STRING"),
+    bigquery.SchemaField("loaded_at", "TIMESTAMP"),
+]
+
+REGION_TABLE_SCHEMA = [
+    bigquery.SchemaField("period", "DATE"),
+    bigquery.SchemaField("respondent", "STRING"),
+    bigquery.SchemaField("respondent_name", "STRING"),
+    bigquery.SchemaField("timezone", "STRING"),
+    bigquery.SchemaField("value", "FLOAT"),
+    bigquery.SchemaField("value_units", "STRING"),
+    bigquery.SchemaField("loaded_at", "TIMESTAMP"),
+]
+
+
 # -----------------------------
 # Verification
 # -----------------------------
@@ -200,17 +241,24 @@ def main() -> None:
     client = bigquery.Client(project=PROJECT_ID)
     ensure_dataset_exists(client, PROJECT_ID, DATASET_ID)
 
-    # Fuel table
-    fuel_df = extract_daily_fuel(EIA_API_KEY, start_date, end_date)
-    print(f"Fetched {len(fuel_df)} daily fuel rows")
-    load_table(fuel_df, PROJECT_ID, DATASET_ID, FUEL_TABLE_ID)
-    verify_table(PROJECT_ID, DATASET_ID, FUEL_TABLE_ID)
-
-    # Region table
-    region_df = extract_daily_region(EIA_API_KEY, start_date, end_date)
-    print(f"Fetched {len(region_df)} daily region rows")
-    load_table(region_df, PROJECT_ID, DATASET_ID, REGION_TABLE_ID)
-    verify_table(PROJECT_ID, DATASET_ID, REGION_TABLE_ID)
+    if DATA_SOURCE == "fuel":
+        ensure_table_exists(
+            client, PROJECT_ID, DATASET_ID, FUEL_TABLE_ID, FUEL_TABLE_SCHEMA
+        )
+        fuel_df = extract_daily_fuel(EIA_API_KEY, start_date, end_date)
+        print(f"Fetched {len(fuel_df)} daily fuel rows")
+        load_table(fuel_df, PROJECT_ID, DATASET_ID, FUEL_TABLE_ID)
+        verify_table(PROJECT_ID, DATASET_ID, FUEL_TABLE_ID)
+    elif DATA_SOURCE == "region":
+        ensure_table_exists(
+            client, PROJECT_ID, DATASET_ID, REGION_TABLE_ID, REGION_TABLE_SCHEMA
+        )
+        region_df = extract_daily_region(EIA_API_KEY, start_date, end_date)
+        print(f"Fetched {len(region_df)} daily region rows")
+        load_table(region_df, PROJECT_ID, DATASET_ID, REGION_TABLE_ID)
+        verify_table(PROJECT_ID, DATASET_ID, REGION_TABLE_ID)
+    else:
+        raise ValueError("Unsupported EIA_DATA_SOURCE. Use 'fuel' or 'region'.")
 
 
 if __name__ == "__main__":

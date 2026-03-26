@@ -23,27 +23,63 @@ Streamlit dashboard for exploring U.S. electricity demand data from the U.S. Ene
    ```bash
    pip install "pandera[pandas]"
    ```
-3. Configure your EIA API key in Streamlit secrets:
+3. Configure Streamlit secrets for BigQuery access:
    ```toml
    # .streamlit/secrets.toml
-   EIA_API_KEY = "your_key_here"
+   [gcp_service_account]
+   type = "service_account"
+   project_id = "sipa-adv-c-purple-flamingo"
+   private_key_id = "..."
+   private_key = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+   client_email = "streamlit@sipa-adv-c-purple-flamingo.iam.gserviceaccount.com"
+   client_id = "..."
+   token_uri = "https://oauth2.googleapis.com/token"
+
+   [bigquery]
+   project_id = "sipa-adv-c-purple-flamingo"
+   dataset_id = "eia_data"
+   fuel_table_id = "daily_fuel_main"
    ```
+   You can copy the starter template from `.streamlit/secrets.example.toml`.
+4. If you will run the load script locally, authenticate your user account first:
+   ```bash
+   gcloud auth application-default login
+   export EIA_API_KEY="your_eia_api_key"
+   python load_daily_eia_to_bigquery.py
+   ```
+   The load script defaults to the fuel dataset for this lab. To load the region table instead:
+   ```bash
+   EIA_DATA_SOURCE=region python load_daily_eia_to_bigquery.py
+   ```
+
+The repo already ignores `.streamlit/secrets.toml`, so the service account key will not be committed.
 
 ## Run the App
 
 ```bash
-streamlit run mainPage.py
+streamlit run main_page.py
 ```
 
 This opens a two-page app:
 - Fuel type demand view (`app.py`)
 - Region demand view (`region.py`)
 
+The fuel type page reads from BigQuery. The region page still reads directly from EIA for now.
+
 ## Tests
 
 ```bash
 pytest -q
 ```
+
+## BigQuery Load Verification
+
+`load_daily_eia_to_bigquery.py` verifies each load by printing:
+- total row count
+- minimum and maximum `period`
+- latest `loaded_at` timestamp
+
+That gives you a quick way to confirm the refresh worked as intended after upload.
 
 ## Pandera Validation in This Repo
 
