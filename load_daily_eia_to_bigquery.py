@@ -258,9 +258,7 @@ def main() -> None:
         load_table(region_df, PROJECT_ID, DATASET_ID, REGION_TABLE_ID)
         verify_table(PROJECT_ID, DATASET_ID, REGION_TABLE_ID)
     else:
-        raise ValueError(
-            "Unsupported EIA_DATA_SOURCE. Use 'fuel' or 'region'."
-        )
+        raise ValueError("Unsupported EIA_DATA_SOURCE. Use 'fuel' or 'region'.")
 
 
 if __name__ == "__main__":

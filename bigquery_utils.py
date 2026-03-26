@@ -100,7 +100,9 @@ def read_fuel_data(
 
     job_config = bigquery.QueryJobConfig(
         query_parameters=[
-            bigquery.ScalarQueryParameter("start_date", "DATE", date.fromisoformat(start)),
+            bigquery.ScalarQueryParameter(
+                "start_date", "DATE", date.fromisoformat(start)
+            ),
             bigquery.ScalarQueryParameter("end_date", "DATE", date.fromisoformat(end)),
         ]
     )
