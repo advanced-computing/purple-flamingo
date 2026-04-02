@@ -92,9 +92,7 @@ def get_cached_bigquery_client():
 
 
 @st.cache_data(show_spinner=False)
-def build_main_chart_data(
-    df: pd.DataFrame, value_col: str, top_n: int
-) -> pd.DataFrame:
+def build_main_chart_data(df: pd.DataFrame, value_col: str, top_n: int) -> pd.DataFrame:
     chart_df = df.loc[:, ["period", "type_name", value_col]].rename(
         columns={value_col: "Demand"}
     )
@@ -103,7 +101,9 @@ def build_main_chart_data(
 
 
 @st.cache_data(show_spinner=False)
-def build_anomaly_data(df: pd.DataFrame, value_col: str, z_threshold: float) -> pd.DataFrame:
+def build_anomaly_data(
+    df: pd.DataFrame, value_col: str, z_threshold: float
+) -> pd.DataFrame:
     daily = compute_daily_totals(df, value_col=value_col)
     daily = demand_day_over_day_change(daily)
     return detect_demand_anomalies(daily, z_threshold=z_threshold)

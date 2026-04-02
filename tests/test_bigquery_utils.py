@@ -2,7 +2,9 @@ from bigquery_utils import get_bigquery_config
 
 
 def test_get_bigquery_config_includes_default_region_table():
-    config = get_bigquery_config({"gcp_service_account": {"project_id": "demo-project"}})
+    config = get_bigquery_config(
+        {"gcp_service_account": {"project_id": "demo-project"}}
+    )
 
     assert config["project_id"] == "demo-project"
     assert config["dataset_id"] == "eia_data"
