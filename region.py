@@ -1,31 +1,28 @@
+import time
+
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 import plotly.graph_objects as go
+from google.api_core.exceptions import GoogleAPIError
 
+from bigquery_utils import get_bigquery_client, get_bigquery_config, read_region_data
 from data_utils import (
     convert_units,
-    filter_to_timezone,
-    parse_period_and_value,
-    top_n_by_total,
     compute_daily_totals,
     demand_day_over_day_change,
     detect_demand_anomalies,
+    drop_invalid_required_rows,
+    parse_period_and_value,
+    top_n_by_total,
 )
-from eia_api import fetch_daily_region
-from schemas import validate_parsed, validate_region_raw
+
+start_time = time.time()
 
 st.set_page_config(page_title="EIA Demand by Region (ET)", layout="wide")
 st.title("U.S. Electricity Demand by Region")
-st.caption("Data: U.S. Energy Information Administration (EIA) — Eastern Time")
+st.caption("Data: U.S. Energy Information Administration (EIA), served from BigQuery")
 st.markdown("**Team:** Aileen Yang · Aria Kovalovich · Chengpu Deng")
-
-# API Key Retrieval
-api_key = st.secrets.get("EIA_API_KEY", None)
-# BASE_URL = "https://api.eia.gov/v2/electricity/rto/daily-region-data/data/"
-if not api_key:
-    st.error("Missing EIA_API_KEY in Streamlit secrets.")
-    st.stop()
 
 # Predefine Sidebar
 with st.sidebar:
@@ -48,36 +45,49 @@ with st.sidebar:
     )
 
 
+@st.cache_resource(show_spinner=False)
+def get_cached_bigquery_client():
+    return get_bigquery_client(st.secrets)
+
+
 @st.cache_data(show_spinner=False)
-def load_region_data(api_key: str, start: str, end: str) -> pd.DataFrame:
-    rows = fetch_daily_region(api_key, start, end)
-    return pd.json_normalize(rows)
+def load_region_data(start: str, end: str) -> pd.DataFrame:
+    client = get_cached_bigquery_client()
+    config = get_bigquery_config(st.secrets)
+    raw_df = read_region_data(
+        client=client,
+        project_id=config["project_id"],
+        dataset_id=config["dataset_id"],
+        table_id=config["region_table_id"],
+        start=start,
+        end=end,
+    )
+    parsed_df = parse_period_and_value(raw_df)
+    cleaned_df, _ = drop_invalid_required_rows(
+        parsed_df, required_columns=["period", "value", "respondent"]
+    )
+    return cleaned_df
 
 
-with st.spinner("Loading data from EIA..."):
-    df = load_region_data(api_key, start, end)
-
-if df.empty:
-    st.warning("No data returned. Double-check your dates and API key.")
+try:
+    with st.spinner("Loading data from BigQuery..."):
+        df = load_region_data(start, end)
+except ValueError as exc:
+    st.error(str(exc))
+    st.stop()
+except GoogleAPIError as exc:
+    st.error(f"BigQuery request failed: {exc}")
     st.stop()
 
-df, raw_warnings = validate_region_raw(df)
-for warning in raw_warnings:
-    st.warning(warning)
-
 if df.empty:
-    st.warning("No usable rows after raw data validation.")
+    st.warning("No rows returned from BigQuery for the selected date range.")
     st.stop()
 
-df = parse_period_and_value(df)
-df, parsed_warnings = validate_parsed(
+df, parsed_warnings = drop_invalid_required_rows(
     df, required_columns=["period", "value", "respondent"]
 )
 for warning in parsed_warnings:
     st.warning(warning)
-
-# Fix to Eastern Time
-df = filter_to_timezone(df, "eastern")
 
 if df.empty:
     st.warning("No usable rows after cleaning and filtering.")
@@ -230,3 +240,6 @@ if available_dates:
         labels={ycol: ylabel, "respondent": "Region"},
     )
     st.plotly_chart(fig4, use_container_width=True)
+
+elapsed = time.time() - start_time
+st.caption(f"Page loaded in {elapsed:.2f} seconds")

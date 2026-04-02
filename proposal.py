@@ -1,4 +1,8 @@
+import time
+
 import streamlit as st
+
+start_time = time.time()
 
 st.set_page_config(page_title="Project Proposal & Reflection", layout="wide")
 
@@ -190,3 +194,6 @@ st.markdown("""
 - Handling time-series alignment
 - Geospatial aggregation
 """)
+
+elapsed = time.time() - start_time
+st.caption(f"Page loaded in {elapsed:.2f} seconds")

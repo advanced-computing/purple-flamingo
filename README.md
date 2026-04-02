@@ -53,6 +53,14 @@ Streamlit dashboard for exploring U.S. electricity demand data from the U.S. Ene
    ```bash
    EIA_DATA_SOURCE=region python load_daily_eia_to_bigquery.py
    ```
+   To support both app pages from BigQuery, include both table names in secrets:
+   ```toml
+   [bigquery]
+   project_id = "sipa-adv-c-purple-flamingo"
+   dataset_id = "eia_data"
+   fuel_table_id = "daily_fuel_main"
+   region_table_id = "daily_region_main"
+   ```
 
 The repo already ignores `.streamlit/secrets.toml`, so the service account key will not be committed.
 
@@ -66,7 +74,14 @@ This opens a two-page app:
 - Fuel type demand view (`app.py`)
 - Region demand view (`region.py`)
 
-The fuel type page reads from BigQuery. The region page still reads directly from EIA for now.
+Both analytical pages now read from BigQuery with date filters pushed into SQL so the app only loads the records needed for the selected window.
+
+## Lab 10 Notes
+
+See [`LAB_10.md`](LAB_10.md) for the write-up covering:
+- which loading strategy each dataset uses
+- why both datasets now live in BigQuery
+- the performance changes made to keep page loads fast
 
 ## Tests
 

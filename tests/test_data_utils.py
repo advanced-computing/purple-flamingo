@@ -2,6 +2,7 @@ import pandas as pd
 
 from data_utils import (
     convert_units,
+    drop_invalid_required_rows,
     filter_to_timezone,
     parse_period_and_value,
     top_n_by_total,
@@ -61,3 +62,20 @@ def test_parse_period_and_value_converts_types():
     assert parsed["period"].notna().sum() == 1
     assert parsed["value"].tolist()[0] == 12.5
     assert pd.isna(parsed["value"].tolist()[1])
+
+
+def test_drop_invalid_required_rows_filters_null_required_fields():
+    df = pd.DataFrame(
+        {
+            "period": [pd.Timestamp("2026-02-01"), pd.NaT],
+            "value": [10.0, 20.0],
+            "type_name": ["coal", "gas"],
+        }
+    )
+    cleaned, warnings = drop_invalid_required_rows(
+        df, required_columns=["period", "value", "type_name"]
+    )
+
+    assert len(cleaned) == 1
+    assert cleaned["type_name"].tolist() == ["coal"]
+    assert any("Dropped 1 invalid rows" in warning for warning in warnings)
