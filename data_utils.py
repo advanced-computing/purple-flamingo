@@ -8,15 +8,28 @@ def parse_period_and_value(df: pd.DataFrame) -> pd.DataFrame:
     return parsed
 
 
+def drop_invalid_required_rows(
+    df: pd.DataFrame, required_columns: list[str]
+) -> tuple[pd.DataFrame, list[str]]:
+    cleaned = df.dropna(subset=required_columns).copy()
+    warnings: list[str] = []
+    dropped_rows = len(df) - len(cleaned)
+    if dropped_rows > 0:
+        warnings.append(
+            f"Dropped {dropped_rows} invalid rows with null required fields."
+        )
+    return cleaned, warnings
+
+
 def convert_units(
     df: pd.DataFrame, units: str, value_col: str = "value"
 ) -> tuple[pd.DataFrame, str, str]:
-    converted = df.copy()
     if units == "GWh":
         scaled_col = f"{value_col}_gwh"
+        converted = df.copy()
         converted[scaled_col] = converted[value_col] / 1000.0
         return converted, scaled_col, "Demand (GWh)"
-    return converted, value_col, "Demand (MWh)"
+    return df, value_col, "Demand (MWh)"
 
 
 def filter_to_timezone(
@@ -45,11 +58,10 @@ def top_n_by_total(
 def compute_daily_totals(df: pd.DataFrame, value_col: str = "value") -> pd.DataFrame:
     """Sum all fuel types to get total daily demand per period."""
     return (
-        df.groupby("period")[value_col]
+        df.groupby("period", sort=False)[value_col]
         .sum()
         .reset_index()
         .rename(columns={value_col: "total_demand"})
-        .sort_values("period")
     )
 
 
@@ -102,7 +114,7 @@ def fuel_share_by_day(
     Compute each fuel type's share (%) of total daily demand.
     Returns a wide dataframe: period × fuel_type = share%.
     """
-    agg = df.groupby(["period", fuel_col])[value_col].sum().reset_index()
+    agg = df.loc[:, ["period", fuel_col, value_col]].copy()
     totals = agg.groupby("period")[value_col].transform("sum")
     agg["share_pct"] = (agg[value_col] / totals * 100).round(2)
     return agg

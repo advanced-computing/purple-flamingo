@@ -1,3 +1,6 @@
+import time
+from datetime import date, timedelta
+
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -10,13 +13,16 @@ from data_utils import (
     convert_units,
     demand_day_over_day_change,
     detect_demand_anomalies,
-    filter_to_timezone,
+    drop_invalid_required_rows,
     fuel_mix_on_anomaly_days,
     largest_fuel_shifts,
     parse_period_and_value,
     top_n_by_total,
 )
-from schemas import validate_fuel_raw, validate_parsed
+
+start_time = time.time()
+default_end = date.today()
+default_start = default_end - timedelta(days=21)
 
 st.set_page_config(page_title="EIA Fuel Type Demand", layout="wide")
 st.title("U.S. Electricity Demand by Fuel Type")
@@ -29,10 +35,10 @@ st.markdown("**Team:** Aileen Yang · Aria Kovalovich · Chengpu Deng")
 with st.sidebar:
     st.header("Settings")
 
-    start = st.text_input("Start date (YYYY-MM-DD)", value="2026-01-15")
-    end = st.text_input("End date (YYYY-MM-DD)", value="2026-03-08")
+    start = st.text_input("Start date (YYYY-MM-DD)", value=default_start.isoformat())
+    end = st.text_input("End date (YYYY-MM-DD)", value=default_end.isoformat())
     units = st.radio("Units", ["MWh", "GWh"], horizontal=True)
-    top_n = st.slider("Show top N fuel types (by total)", 1, 15, 10)
+    top_n = st.slider("Show top N fuel types (by total)", 1, 15, 5)
     filter_eastern = st.checkbox("Filter to Eastern timezone only", value=True)
 
     st.divider()
@@ -61,22 +67,73 @@ with st.sidebar:
 # Data Loading
 # -------------------
 @st.cache_data(show_spinner=False)
-def load_fuel_data(start: str, end: str) -> pd.DataFrame:
-    client = get_bigquery_client(st.secrets)
+def load_fuel_data(start: str, end: str, eastern_only: bool) -> pd.DataFrame:
+    client = get_cached_bigquery_client()
     config = get_bigquery_config(st.secrets)
-    return read_fuel_data(
+    raw_df = read_fuel_data(
         client=client,
         project_id=config["project_id"],
         dataset_id=config["dataset_id"],
         table_id=config["fuel_table_id"],
         start=start,
         end=end,
+        eastern_only=eastern_only,
     )
+    parsed_df = parse_period_and_value(raw_df)
+    cleaned_df, _ = drop_invalid_required_rows(
+        parsed_df, required_columns=["period", "value", "type_name"]
+    )
+    return cleaned_df
+
+
+@st.cache_resource(show_spinner=False)
+def get_cached_bigquery_client():
+    return get_bigquery_client(st.secrets)
+
+
+@st.cache_data(show_spinner=False)
+def build_main_chart_data(
+    df: pd.DataFrame, value_col: str, top_n: int
+) -> pd.DataFrame:
+    chart_df = df.loc[:, ["period", "type_name", value_col]].rename(
+        columns={value_col: "Demand"}
+    )
+    filtered = top_n_by_total(chart_df, "type_name", "Demand", top_n=top_n)
+    return filtered.sort_values("period")
+
+
+@st.cache_data(show_spinner=False)
+def build_anomaly_data(df: pd.DataFrame, value_col: str, z_threshold: float) -> pd.DataFrame:
+    daily = compute_daily_totals(df, value_col=value_col)
+    daily = demand_day_over_day_change(daily)
+    return detect_demand_anomalies(daily, z_threshold=z_threshold)
+
+
+@st.cache_data(show_spinner=False)
+def build_mix_comparison(
+    df: pd.DataFrame,
+    daily: pd.DataFrame,
+    value_col: str,
+    anomaly_focus: str,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    mix_comparison = fuel_mix_on_anomaly_days(
+        df,
+        daily,
+        fuel_col="type_name",
+        value_col=value_col,
+        anomaly_type="high" if anomaly_focus == "high_demand" else "low",
+    )
+    shifts = largest_fuel_shifts(
+        mix_comparison,
+        fuel_col="type_name",
+        anomaly_label="high_demand" if anomaly_focus == "high_demand" else "low_demand",
+    )
+    return mix_comparison, shifts
 
 
 try:
     with st.spinner("Loading data from BigQuery..."):
-        df_raw = load_fuel_data(start, end)
+        df = load_fuel_data(start, end, filter_eastern)
 except ValueError as exc:
     st.error(str(exc))
     st.stop()
@@ -84,63 +141,17 @@ except GoogleAPIError as exc:
     st.error(f"BigQuery request failed: {exc}")
     st.stop()
 
-if df_raw.empty:
+if df.empty:
     st.warning("No rows returned from BigQuery for the selected date range.")
     st.stop()
 
-df_raw = df_raw.rename(
-    columns={
-        "respondent_name": "respondent-name",
-        "type_name": "type-name",
-        "value_units": "value-units",
-    }
-)
-df_raw["period"] = df_raw["period"].astype(str)
-df_raw["value"] = df_raw["value"].astype(str)
-
-df, raw_warnings = validate_fuel_raw(df_raw)
-for warning in raw_warnings:
-    st.warning(warning)
-
-if df.empty:
-    st.warning("No usable rows after raw data validation.")
-    st.stop()
-
-df = parse_period_and_value(df)
-df = df.rename(columns={"type-name": "type_name"})
-
-df, parsed_warnings = validate_parsed(
-    df, required_columns=["period", "value", "type_name"]
-)
-for warning in parsed_warnings:
-    st.warning(warning)
-
-if filter_eastern:
-    df = filter_to_timezone(df, "eastern")
-
-if df.empty:
-    st.warning("No usable rows after cleaning and filtering.")
-    st.stop()
-
 df, ycol, ylabel = convert_units(df, units)
-
-# -------------------
-# Aggregation by date and fuel type
-# -------------------
-agg = (
-    df.groupby(["period", "type_name"], as_index=False)[ycol]
-    .sum()
-    .rename(columns={ycol: "Demand"})
-)
-
-# Keep top N fuel types by total
-agg = top_n_by_total(agg, "type_name", "Demand", top_n=top_n)
+agg_sorted = build_main_chart_data(df, ycol, top_n)
 
 # -------------------
 # Plot Graph (Main Demand)
 # -------------------
 st.subheader("Electricity Demand by Fuel Type")
-agg_sorted = agg.sort_values("period")
 
 if chart_type == "Stacked Area":
     fig = px.area(
@@ -176,11 +187,8 @@ st.markdown(
     f"Days where total demand deviates more than **{z_threshold}σ** from the mean are flagged."
 )
 
-daily = compute_daily_totals(df, value_col=ycol)
-daily = demand_day_over_day_change(daily)
-daily = detect_demand_anomalies(daily, z_threshold=z_threshold)
+daily = build_anomaly_data(df, ycol, z_threshold)
 
-# Plot total demand with anomaly markers
 fig2 = go.Figure()
 fig2.add_trace(
     go.Scatter(
@@ -229,7 +237,6 @@ fig2.update_layout(
 )
 st.plotly_chart(fig2, use_container_width=True)
 
-# Day-over-day change chart
 fig3 = px.bar(
     daily,
     x="period",
@@ -243,7 +250,6 @@ fig3 = px.bar(
 fig3.update_layout(coloraxis_showscale=False)
 st.plotly_chart(fig3, use_container_width=True)
 
-# Summary table
 n_high = (daily["anomaly_type"] == "high").sum()
 n_low = (daily["anomaly_type"] == "low").sum()
 col1, col2, col3 = st.columns(3)
@@ -266,35 +272,18 @@ if not daily[daily["anomaly_type"].notna()].empty:
         anomaly_table.columns = ["Date", ylabel, "Z-Score", "Day-over-Day %", "Type"]
         st.dataframe(anomaly_table.reset_index(drop=True), use_container_width=True)
 
-# -------------------
-# Plot Graph (Fuel Mix Shift on Anomaly Days)
-# -------------------
 st.subheader("Fuel Mix Shifts on Anomaly Days")
 st.markdown(
     "How does the **fuel mix (% share)** change on high- or low-demand days vs normal days?"
 )
 
-# Re-use df with original value col for shares
-df_for_mix = df.rename(columns={"type_name": "type-name"})
-mix_comparison = fuel_mix_on_anomaly_days(
-    df,
-    daily,
-    fuel_col="type_name",
-    value_col=ycol,
-    anomaly_type="high" if anomaly_focus == "high_demand" else "low",
-)
+mix_comparison, shifts = build_mix_comparison(df, daily, ycol, anomaly_focus)
 
 if mix_comparison.empty:
     st.info(
         "No anomaly days found with current threshold. Try lowering the z-score slider."
     )
 else:
-    shifts = largest_fuel_shifts(
-        mix_comparison,
-        fuel_col="type_name",
-        anomaly_label="high_demand" if anomaly_focus == "high_demand" else "low_demand",
-    )
-
     label = "High" if anomaly_focus == "high_demand" else "Low"
     fig4 = px.bar(
         mix_comparison,
@@ -333,3 +322,6 @@ else:
 
         with st.expander("View shift data table"):
             st.dataframe(shifts.reset_index(drop=True), use_container_width=True)
+
+elapsed = time.time() - start_time
+st.caption(f"Page loaded in {elapsed:.2f} seconds")
