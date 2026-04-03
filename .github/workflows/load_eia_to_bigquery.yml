@@ -7,12 +7,12 @@ on:
     - cron: "0 6 * * *"
   # Support manual trigger for testing
   workflow_dispatch:
-    inputs:
-      data_source:
-        description: "Which dataset to load: 'fuel' or 'region'"
-        required: false
-        default: "fuel"
-
+ 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  PROJECT: sipa-adv-c-purple-flamingo
+  DATASET: eia_data
+ 
 jobs:
   load_fuel:
     name: Load EIA fuel data
@@ -20,27 +20,39 @@ jobs:
     steps:
       - name: Clone repository
         uses: actions/checkout@v4
-
+ 
       - name: Install Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-
+ 
       - name: Install dependencies
         run: pip install -r requirements.txt
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
-
+ 
+      - name: Write GCP credentials file
+        env:
+          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+        run: |
+          printf '%s' "$GCP_SERVICE_ACCOUNT_KEY" > /tmp/gcp_key.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp_key.json" >> $GITHUB_ENV
+ 
       - name: Load fuel data to BigQuery
         env:
           EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
           EIA_DATA_SOURCE: "fuel"
         run: python load_daily_eia_to_bigquery.py
-
+ 
+      - name: Snapshot fuel table
+        run: |
+          SNAPSHOT_NAME="daily_fuel_main_snap_$(date -u +%Y%m%d)"
+          gcloud auth activate-service-account --key-file=/tmp/gcp_key.json
+          bq query --use_legacy_sql=false --project_id=$PROJECT \
+            "CREATE SNAPSHOT TABLE IF NOT EXISTS \`$PROJECT.$DATASET.${SNAPSHOT_NAME}\`
+             CLONE \`$PROJECT.$DATASET.daily_fuel_main\`
+             OPTIONS (expiration_timestamp = TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 30 DAY));"
+          echo "Created snapshot: $SNAPSHOT_NAME (expires in 30 days)"
+ 
   load_region:
     name: Load EIA region data
     runs-on: ubuntu-latest
@@ -49,23 +61,35 @@ jobs:
     steps:
       - name: Clone repository
         uses: actions/checkout@v4
-
+ 
       - name: Install Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-
+ 
       - name: Install dependencies
         run: pip install -r requirements.txt
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
-
+ 
+      - name: Write GCP credentials file
+        env:
+          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+        run: |
+          printf '%s' "$GCP_SERVICE_ACCOUNT_KEY" > /tmp/gcp_key.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp_key.json" >> $GITHUB_ENV
+ 
       - name: Load region data to BigQuery
         env:
           EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
           EIA_DATA_SOURCE: "region"
         run: python load_daily_eia_to_bigquery.py
+ 
+      - name: Snapshot region table
+        run: |
+          SNAPSHOT_NAME="daily_region_main_snap_$(date -u +%Y%m%d)"
+          gcloud auth activate-service-account --key-file=/tmp/gcp_key.json
+          bq query --use_legacy_sql=false --project_id=$PROJECT \
+            "CREATE SNAPSHOT TABLE IF NOT EXISTS \`$PROJECT.$DATASET.${SNAPSHOT_NAME}\`
+             CLONE \`$PROJECT.$DATASET.daily_region_main\`
+             OPTIONS (expiration_timestamp = TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 30 DAY));"
+          echo "Created snapshot: $SNAPSHOT_NAME (expires in 30 days)"
