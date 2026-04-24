@@ -14,6 +14,7 @@ from google.oauth2 import service_account
 DEFAULT_DATASET_ID = "eia_data"
 DEFAULT_FUEL_TABLE_ID = "daily_fuel_main"
 DEFAULT_REGION_TABLE_ID = "daily_region_main"
+DEFAULT_PRICING_TABLE_ID = "hourly_pricing_main"
 DEFAULT_PROJECT_ID = "sipa-adv-c-purple-flamingo"
 
 
@@ -43,6 +44,7 @@ def get_bigquery_config(secrets: Mapping[str, Any]) -> dict[str, str]:
         "dataset_id": config.get("dataset_id", DEFAULT_DATASET_ID),
         "fuel_table_id": config.get("fuel_table_id", DEFAULT_FUEL_TABLE_ID),
         "region_table_id": config.get("region_table_id", DEFAULT_REGION_TABLE_ID),
+        "pricing_table_id": config.get("pricing_table_id", DEFAULT_PRICING_TABLE_ID),
     }
 
 
@@ -114,7 +116,7 @@ def read_fuel_data(
     return client.query(sql, job_config=job_config).to_dataframe()
 
 
-def read_region_data(
+def read_pricing_data(
     client: bigquery.Client,
     project_id: str,
     dataset_id: str,
@@ -123,15 +125,23 @@ def read_region_data(
     end: str,
 ) -> pd.DataFrame:
     table_fqn = f"{project_id}.{dataset_id}.{table_id}"
+
     sql = f"""
     SELECT
-        CAST(period AS STRING) AS period,
-        respondent,
-        SUM(value) AS value
+        iso,
+        DATE(interval_start) AS period,
+        interval_start,
+        interval_end,
+        market,
+        location,
+        location_type,
+        lmp,
+        energy,
+        congestion,
+        loss
     FROM `{table_fqn}`
-    WHERE period BETWEEN @start_date AND @end_date
-      AND LOWER(timezone) = 'eastern'
-    GROUP BY period, respondent
+    WHERE DATE(interval_start) BETWEEN @start_date AND @end_date
+    ORDER BY iso, location, interval_start
     """
 
     job_config = bigquery.QueryJobConfig(

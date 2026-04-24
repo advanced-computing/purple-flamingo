@@ -10,6 +10,7 @@ def test_get_bigquery_config_includes_default_region_table():
     assert config["dataset_id"] == "eia_data"
     assert config["fuel_table_id"] == "daily_fuel_main"
     assert config["region_table_id"] == "daily_region_main"
+    assert config["pricing_table_id"] == "hourly_pricing_main"
 
 
 def test_get_bigquery_config_allows_region_table_override():
@@ -24,9 +25,8 @@ def test_get_bigquery_config_allows_region_table_override():
         }
     )
 
-    assert config == {
-        "project_id": "demo-project",
-        "dataset_id": "demo_dataset",
-        "fuel_table_id": "fuel_table",
-        "region_table_id": "region_table",
-    }
+    assert config["project_id"] == "demo-project"
+    assert config["dataset_id"] == "demo_dataset"
+    assert config["fuel_table_id"] == "fuel_table"
+    assert config["region_table_id"] == "region_table"
+    assert config["pricing_table_id"] == "hourly_pricing_main"

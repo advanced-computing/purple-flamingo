@@ -1,0 +1,53 @@
+name: Load GridStatus Pricing Data to BigQuery
+
+on:
+  schedule:
+    # Daily at 7:00 AM UTC (slightly after EIA job to avoid overlap)
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  PROJECT: sipa-adv-c-purple-flamingo
+  DATASET: eia_data
+
+jobs:
+  load_pricing:
+    name: Load hourly pricing data (CAISO, NYISO, ERCOT)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Write GCP credentials file
+        env:
+          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+        run: |
+          printf '%s' "$GCP_SERVICE_ACCOUNT_KEY" > /tmp/gcp_key.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp_key.json" >> $GITHUB_ENV
+
+      - name: Load pricing data to BigQuery
+        run: python load_gridstatus_hourly_prices_to_bigquery.py
+
+      - name: Snapshot pricing table
+        run: |
+          SNAPSHOT_NAME="hourly_pricing_main_snap_$(date -u +%Y%m%d)"
+
+          gcloud auth activate-service-account --key-file=/tmp/gcp_key.json
+
+          bq query --use_legacy_sql=false --project_id=$PROJECT \
+            "CREATE SNAPSHOT TABLE IF NOT EXISTS \`$PROJECT.$DATASET.${SNAPSHOT_NAME}\`
+             CLONE \`$PROJECT.$DATASET.hourly_pricing_main\`
+             OPTIONS (expiration_timestamp = TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 30 DAY));"
+
+          echo "Created snapshot: $SNAPSHOT_NAME (expires in 30 days)"
