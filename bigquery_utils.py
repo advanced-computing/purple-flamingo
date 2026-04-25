@@ -116,6 +116,38 @@ def read_fuel_data(
     return client.query(sql, job_config=job_config).to_dataframe()
 
 
+def read_region_data(
+    client: bigquery.Client,
+    project_id: str,
+    dataset_id: str,
+    table_id: str,
+    start: str,
+    end: str,
+) -> pd.DataFrame:
+    table_fqn = f"{project_id}.{dataset_id}.{table_id}"
+    sql = f"""
+    SELECT
+        CAST(period AS STRING) AS period,
+        respondent,
+        respondent_name,
+        SUM(value) AS value
+    FROM `{table_fqn}`
+    WHERE period BETWEEN @start_date AND @end_date
+    GROUP BY period, respondent, respondent_name
+    """
+
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter(
+                "start_date", "DATE", date.fromisoformat(start)
+            ),
+            bigquery.ScalarQueryParameter("end_date", "DATE", date.fromisoformat(end)),
+        ]
+    )
+
+    return client.query(sql, job_config=job_config).to_dataframe()
+
+
 def read_pricing_data(
     client: bigquery.Client,
     project_id: str,
