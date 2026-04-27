@@ -1,15 +1,16 @@
 import time
+from datetime import date, timedelta
 
 import pandas as pd
 import plotly.express as px
-import streamlit as st
 import plotly.graph_objects as go
+import streamlit as st
 from google.api_core.exceptions import GoogleAPIError
 
 from bigquery_utils import get_bigquery_client, get_bigquery_config, read_region_data
 from data_utils import (
-    convert_units,
     compute_daily_totals,
+    convert_units,
     demand_day_over_day_change,
     detect_demand_anomalies,
     drop_invalid_required_rows,
@@ -18,18 +19,19 @@ from data_utils import (
 )
 
 start_time = time.time()
+default_end = date.today()
+default_start = default_end - timedelta(days=90)
 
 st.set_page_config(page_title="EIA Demand by Region (ET)", layout="wide")
 st.title("U.S. Electricity Demand by Region")
 st.caption("Data: U.S. Energy Information Administration (EIA), served from BigQuery")
 st.markdown("**Team:** Aileen Yang · Aria Kovalovich · Chengpu Deng")
 
-# Predefine Sidebar
 with st.sidebar:
     st.header("Settings")
 
-    start = st.text_input("Start date (YYYY-MM-DD)", value="2026-01-15")
-    end = st.text_input("End date (YYYY-MM-DD)", value="2026-03-09")
+    start = st.text_input("Start date (YYYY-MM-DD)", value=default_start.isoformat())
+    end = st.text_input("End date (YYYY-MM-DD)", value=default_end.isoformat())
     units = st.radio("Units", ["MWh", "GWh"], horizontal=True)
     top_n = st.slider("Show top N regions (by total)", 1, 20, 10)
     chart_type = st.radio("Chart type", ["Line", "Stacked Area"], index=0)
@@ -132,84 +134,95 @@ st.plotly_chart(fig, use_container_width=True)
 # ---------------------------
 # Section 2: Regional anomaly detection
 # ---------------------------
-st.subheader("Regional Demand Anomalies")
-
-regions = sorted(df["respondent"].dropna().unique().tolist())
-selected_region = st.selectbox(
-    "Select a region to analyze for anomalies",
-    options=regions,
-    index=0,
+st.markdown(
+    """<style>
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background-color: rgba(76, 120, 168, 0.07);
+        border-color: rgba(76, 120, 168, 0.5) !important;
+    }
+    </style>""",
+    unsafe_allow_html=True,
 )
 
-df_region = df[df["respondent"] == selected_region].copy()
-if df_region.empty:
-    st.info(f"No data for region: {selected_region}")
-else:
-    daily = compute_daily_totals(df_region, value_col=ycol)
-    daily = demand_day_over_day_change(daily)
-    daily = detect_demand_anomalies(daily, z_threshold=z_threshold)
+with st.container(border=True):
+    st.subheader("Regional Demand Anomalies")
+    st.caption("Select a region — both charts below update together.")
 
-    fig2 = go.Figure()
-    fig2.add_trace(
-        go.Scatter(
-            x=daily["period"],
-            y=daily["total_demand"],
-            mode="lines",
-            name="Total demand",
-            line=dict(color="#4C78A8", width=2),
-        )
+    regions = sorted(df["respondent"].dropna().unique().tolist())
+    selected_region = st.selectbox(
+        "Select a region to analyze for anomalies",
+        options=regions,
+        index=0,
     )
 
-    high_days = daily[daily["anomaly_type"] == "high"]
-    low_days = daily[daily["anomaly_type"] == "low"]
+    df_region = df[df["respondent"] == selected_region].copy()
+    if df_region.empty:
+        st.info(f"No data for region: {selected_region}")
+    else:
+        daily = compute_daily_totals(df_region, value_col=ycol)
+        daily = demand_day_over_day_change(daily)
+        daily = detect_demand_anomalies(daily, z_threshold=z_threshold)
 
-    if not high_days.empty:
+        fig2 = go.Figure()
         fig2.add_trace(
             go.Scatter(
-                x=high_days["period"],
-                y=high_days["total_demand"],
-                mode="markers",
-                name="High anomaly",
-                marker=dict(color="red", size=10, symbol="triangle-up"),
-            )
-        )
-    if not low_days.empty:
-        fig2.add_trace(
-            go.Scatter(
-                x=low_days["period"],
-                y=low_days["total_demand"],
-                mode="markers",
-                name="Low anomaly",
-                marker=dict(color="blue", size=10, symbol="triangle-down"),
+                x=daily["period"],
+                y=daily["total_demand"],
+                mode="lines",
+                name="Total demand",
+                line=dict(color="#4C78A8", width=2),
             )
         )
 
-    fig2.update_layout(
-        title=f"Total demand with anomalies — {selected_region}",
-        xaxis_title="Date",
-        yaxis_title=ylabel,
-        hovermode="x unified",
-    )
-    st.plotly_chart(fig2, use_container_width=True)
+        high_days = daily[daily["anomaly_type"] == "high"]
+        low_days = daily[daily["anomaly_type"] == "low"]
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Days analyzed", len(daily))
-    col2.metric("High anomaly days", (daily["anomaly_type"] == "high").sum())
-    col3.metric("Low anomaly days", (daily["anomaly_type"] == "low").sum())
+        if not high_days.empty:
+            fig2.add_trace(
+                go.Scatter(
+                    x=high_days["period"],
+                    y=high_days["total_demand"],
+                    mode="markers",
+                    name="High anomaly",
+                    marker=dict(color="red", size=10, symbol="triangle-up"),
+                )
+            )
+        if not low_days.empty:
+            fig2.add_trace(
+                go.Scatter(
+                    x=low_days["period"],
+                    y=low_days["total_demand"],
+                    mode="markers",
+                    name="Low anomaly",
+                    marker=dict(color="blue", size=10, symbol="triangle-down"),
+                )
+            )
 
-    # Day-over-day change
-    fig3 = px.bar(
-        daily,
-        x="period",
-        y="demand_pct_change",
-        title=f"Day-over-day % change — {selected_region}",
-        labels={"period": "Date", "demand_pct_change": "Change (%)"},
-        color="demand_pct_change",
-        color_continuous_scale=["blue", "lightgrey", "red"],
-        color_continuous_midpoint=0,
-    )
-    fig3.update_layout(coloraxis_showscale=False)
-    st.plotly_chart(fig3, use_container_width=True)
+        fig2.update_layout(
+            title=f"Total demand with anomalies — {selected_region}",
+            xaxis_title="Date",
+            yaxis_title=ylabel,
+            hovermode="x unified",
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Days analyzed", len(daily))
+        col2.metric("High anomaly days", (daily["anomaly_type"] == "high").sum())
+        col3.metric("Low anomaly days", (daily["anomaly_type"] == "low").sum())
+
+        fig3 = px.bar(
+            daily,
+            x="period",
+            y="demand_pct_change",
+            title=f"Day-over-day % change — {selected_region}",
+            labels={"period": "Date", "demand_pct_change": "Change (%)"},
+            color="demand_pct_change",
+            color_continuous_scale=["blue", "lightgrey", "red"],
+            color_continuous_midpoint=0,
+        )
+        fig3.update_layout(coloraxis_showscale=False)
+        st.plotly_chart(fig3, use_container_width=True)
 
 # ---------------------------
 # Section 3: Cross-region comparison on a selected date
