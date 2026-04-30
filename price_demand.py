@@ -33,18 +33,27 @@ st.caption(
     "matched with EIA daily region demand, served from BigQuery"
 )
 st.markdown("**Team:** Aileen Yang · Aria Kovalovich · Chengpu Deng")
+st.info(
+    "Use this page to compare wholesale electricity prices with electricity demand. "
+    "Prices come from GridStatus, while demand comes from EIA regional demand data."
+)
 
 with st.sidebar:
-    st.header("Settings")
+    st.header("Controls")
+
+    st.subheader("Date range")
     start = st.text_input("Start date (YYYY-MM-DD)", value=default_start.isoformat())
     end = st.text_input("End date (YYYY-MM-DD)", value=default_end.isoformat())
+
+    st.divider()
+    st.subheader("Display options")
     selected_isos = st.multiselect(
         "ISOs to display",
         options=ALL_ISOS,
         default=ALL_ISOS,
     )
     lmp_agg = st.radio(
-        "LMP aggregation across locations",
+        "Wholesale price aggregation across locations",
         ["Mean", "Median"],
         horizontal=True,
     )
@@ -165,7 +174,11 @@ daily_prices["period_dt"] = pd.to_datetime(daily_prices["period"])
 # ---------------------------
 # Section 0: Summary metrics
 # ---------------------------
-st.subheader("Summary by ISO")
+st.divider()
+st.subheader("1. Summary by ISO")
+st.caption(
+    "These cards summarize average wholesale prices, average daily demand, and the price-demand correlation."
+)
 cols = st.columns(len(selected_isos))
 for col, iso in zip(cols, selected_isos):
     iso_df = merged[merged["iso"] == iso]
@@ -178,19 +191,24 @@ for col, iso in zip(cols, selected_isos):
         if len(valid) >= 2
         else float("nan")
     )
-    col.metric(f"{iso} — avg LMP", f"${iso_df['avg_lmp'].mean():.2f} /MWh")
+    col.metric(
+        f"{iso} — average wholesale price", f"${iso_df['avg_lmp'].mean():.2f} /MWh"
+    )
     col.metric("Avg daily demand", f"{iso_df['total_demand_gwh'].mean():,.0f} GWh")
     col.metric(
-        "Price–demand r",
+        "Price-demand correlation",
         f"{r:.3f}" if not np.isnan(r) else "N/A",
-        help="Pearson correlation between daily avg LMP and total daily demand",
+        help="Pearson correlation between daily average wholesale price and total daily demand",
     )
 
 # ---------------------------
 # Section 1: Dual-axis time series
 # ---------------------------
-st.subheader("Price & Demand Over Time")
-st.caption("Orange = LMP (left axis) · Blue dashed = demand (right axis)")
+st.divider()
+st.subheader("2. Wholesale price and demand over time")
+st.caption(
+    "Solid line = wholesale price on the left axis. Blue dashed line = demand on the right axis."
+)
 
 n = len(selected_isos)
 fig1 = make_subplots(
@@ -210,7 +228,7 @@ for i, iso in enumerate(selected_isos, start=1):
         go.Scatter(
             x=iso_df["period_dt"],
             y=iso_df["avg_lmp"],
-            name="Avg LMP ($/MWh)",
+            name="Average wholesale price ($/MWh)",
             mode="lines+markers",
             line=dict(color=color, width=2),
             legendgroup="lmp",
@@ -234,7 +252,9 @@ for i, iso in enumerate(selected_isos, start=1):
         col=1,
         secondary_y=True,
     )
-    fig1.update_yaxes(title_text="LMP ($/MWh)", secondary_y=False, row=i, col=1)
+    fig1.update_yaxes(
+        title_text="Wholesale price ($/MWh)", secondary_y=False, row=i, col=1
+    )
     fig1.update_yaxes(title_text="Demand (GWh)", secondary_y=True, row=i, col=1)
 
 fig1.update_xaxes(title_text="Date", row=n, col=1)
@@ -246,7 +266,8 @@ st.plotly_chart(fig1, use_container_width=True)
 # ---------------------------
 # Section 2: Price vs demand scatter
 # ---------------------------
-st.subheader("Price vs. Demand Scatter")
+st.divider()
+st.subheader("3. Price-demand relationship")
 st.caption(
     f"Each point = one day ({start} to {end}). "
     "Dashed line = linear trend. "
@@ -274,7 +295,7 @@ for iso in selected_isos:
             marker=dict(color=color, size=11),
             hovertemplate=(
                 f"<b>{iso}</b><br>Date: %{{text}}<br>"
-                "LMP: $%{x:.2f}/MWh<br>Demand: %{y:,.0f} GWh<extra></extra>"
+                "Wholesale price: $%{x:.2f}/MWh<br>Demand: %{y:,.0f} GWh<extra></extra>"
             ),
         )
     )
@@ -292,7 +313,7 @@ for iso in selected_isos:
         )
 
 fig2.update_layout(
-    xaxis_title="Daily avg LMP ($/MWh)",
+    xaxis_title="Daily average wholesale price ($/MWh)",
     yaxis_title="Total daily demand (GWh)",
     hovermode="closest",
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
@@ -302,9 +323,10 @@ st.plotly_chart(fig2, use_container_width=True)
 # ---------------------------
 # Section 3: Intraday LMP profile
 # ---------------------------
-st.subheader("Intraday LMP Profile")
+st.divider()
+st.subheader("4. Intraday wholesale price profile")
 st.caption(
-    "Average LMP by hour of day (UTC) across the selected period and all locations"
+    "Average wholesale price by hour of day (UTC) across the selected period and all locations"
 )
 
 price_df["hour"] = price_df["interval_start"].dt.hour
@@ -321,8 +343,8 @@ if not hourly_agg.empty:
         pivot,
         aspect="auto",
         color_continuous_scale="RdYlGn_r",
-        title="Avg LMP by hour of day ($/MWh)",
-        labels={"x": "Hour of day (UTC)", "y": "ISO", "color": "Avg LMP ($/MWh)"},
+        title="Average wholesale price by hour of day ($/MWh)",
+        labels={"x": "Hour of day (UTC)", "y": "ISO", "color": "Average price ($/MWh)"},
         text_auto=".1f",
     )
     fig3.update_xaxes(tickmode="linear", dtick=2)
@@ -331,9 +353,10 @@ if not hourly_agg.empty:
 # ---------------------------
 # Section 4: LMP component breakdown
 # ---------------------------
-st.subheader("LMP Component Breakdown")
+st.divider()
+st.subheader("5. Wholesale price component breakdown")
 st.caption(
-    "Average energy, congestion, and loss components of LMP by ISO over the selected period"
+    "Average energy, congestion, and loss components of wholesale prices by ISO over the selected period"
 )
 
 comp_df = (
@@ -353,7 +376,7 @@ fig4 = px.bar(
     y="avg_value",
     color="component",
     barmode="stack",
-    title="Avg LMP components by ISO ($/MWh)",
+    title="Average wholesale price components by ISO ($/MWh)",
     labels={"iso": "ISO", "avg_value": "$/MWh", "component": "Component"},
     color_discrete_map={
         "Energy": "#4C78A8",
@@ -366,16 +389,16 @@ st.plotly_chart(fig4, use_container_width=True)
 # ---------------------------
 # Data table
 # ---------------------------
-with st.expander("View merged daily data"):
+with st.expander("View merged daily price and demand data"):
     display_df = merged[
         ["iso", "period", "avg_lmp", "max_lmp", "min_lmp", "total_demand_gwh"]
     ].copy()
     display_df.columns = [
         "ISO",
         "Date",
-        "Avg LMP ($/MWh)",
-        "Max LMP ($/MWh)",
-        "Min LMP ($/MWh)",
+        "Average Wholesale Price ($/MWh)",
+        "Maximum Wholesale Price ($/MWh)",
+        "Minimum Wholesale Price ($/MWh)",
         "Total Demand (GWh)",
     ]
     st.dataframe(display_df.reset_index(drop=True), use_container_width=True)
