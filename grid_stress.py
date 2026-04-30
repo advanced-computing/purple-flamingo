@@ -27,16 +27,25 @@ st.set_page_config(page_title="Grid Stress & Anomaly Analysis", layout="wide")
 st.title("Grid Stress & Demand Anomaly Analysis")
 st.caption("Data: U.S. Energy Information Administration (EIA), served from BigQuery")
 st.markdown("**Team:** Aileen Yang · Aria Kovalovich · Chengpu Deng")
+st.info(
+    "Use this page to identify unusually high- or low-demand days and compare how "
+    "the generation mix changes on those days versus normal days."
+)
 
 with st.sidebar:
-    st.header("Settings")
+    st.header("Controls")
+
+    st.subheader("Date range")
     start = st.text_input("Start date (YYYY-MM-DD)", value=default_start.isoformat())
     end = st.text_input("End date (YYYY-MM-DD)", value=default_end.isoformat())
+
+    st.divider()
+    st.subheader("Display options")
     units = st.radio("Units", ["MWh", "GWh"], horizontal=True)
     filter_eastern = st.checkbox("Filter to Eastern timezone only", value=True)
 
     st.divider()
-    st.subheader("Anomaly Detection")
+    st.subheader("Analysis settings")
     z_threshold = st.slider(
         "Z-score threshold for anomaly flagging",
         min_value=0.5,
@@ -132,9 +141,10 @@ daily = build_anomaly_data(df, ycol, z_threshold)
 # -------------------
 # Anomaly Detection Chart
 # -------------------
-st.subheader("Grid Stress & Demand Anomaly Detection")
-st.markdown(
-    f"Days where total demand deviates more than **{z_threshold}σ** from the mean are flagged."
+st.divider()
+st.subheader("1. Identify high- and low-demand days")
+st.caption(
+    f"Days where total demand differs from the mean by more than **{z_threshold} standard deviations** are flagged."
 )
 
 fig2 = go.Figure()
@@ -178,7 +188,7 @@ if not low_days.empty:
     )
 
 fig2.update_layout(
-    title="Total daily demand with anomaly markers",
+    title="Total daily demand with high- and low-demand days flagged",
     xaxis_title="Date",
     yaxis_title=ylabel,
     hovermode="x unified",
@@ -202,8 +212,8 @@ n_high = (daily["anomaly_type"] == "high").sum()
 n_low = (daily["anomaly_type"] == "low").sum()
 col1, col2, col3 = st.columns(3)
 col1.metric("Total days analyzed", len(daily))
-col2.metric("High-demand anomaly days", n_high)
-col3.metric("Low-demand anomaly days", n_low)
+col2.metric("High-demand days", n_high)
+col3.metric("Low-demand days", n_low)
 
 if not daily[daily["anomaly_type"].notna()].empty:
     with st.expander("View anomaly day details"):
@@ -217,15 +227,25 @@ if not daily[daily["anomaly_type"].notna()].empty:
             ]
         ].copy()
         anomaly_table["period"] = anomaly_table["period"].dt.strftime("%Y-%m-%d")
-        anomaly_table.columns = ["Date", ylabel, "Z-Score", "Day-over-Day %", "Type"]
+        anomaly_table["anomaly_type"] = anomaly_table["anomaly_type"].map(
+            {"high": "High-demand day", "low": "Low-demand day"}
+        )
+        anomaly_table.columns = [
+            "Date",
+            ylabel,
+            "Demand Z-score",
+            "Day-over-day change (%)",
+            "Day type",
+        ]
         st.dataframe(anomaly_table.reset_index(drop=True), use_container_width=True)
 
 # -------------------
 # Fuel Mix Shifts
 # -------------------
-st.subheader("Fuel Mix Shifts on Anomaly Days")
-st.markdown(
-    "How does the **fuel mix (% share)** change on high- or low-demand days vs normal days?"
+st.divider()
+st.subheader("2. Compare fuel mix on unusual demand days")
+st.caption(
+    "This section compares average generation shares on flagged days with average shares on normal days."
 )
 
 mix_comparison, shifts = build_mix_comparison(df, daily, ycol, anomaly_focus)
@@ -242,11 +262,11 @@ else:
         y="avg_share_pct",
         color="day_type",
         barmode="group",
-        title=f"Avg fuel share (%) — {label}-demand days vs normal",
+        title=f"Average fuel share — {label.lower()}-demand days vs normal days",
         labels={
             "type_name": "Fuel type",
-            "avg_share_pct": "Avg share (%)",
-            "day_type": "Day type",
+            "avg_share_pct": "Average fuel share (%)",
+            "day_type": "Day category",
         },
         color_discrete_map={
             "high_demand": "#d62728",
@@ -263,7 +283,10 @@ else:
             x="type_name",
             y="shift_pct",
             title=f"Fuel mix shift: {label}-demand days minus normal (percentage points)",
-            labels={"type_name": "Fuel type", "shift_pct": "Shift (pp)"},
+            labels={
+                "type_name": "Fuel type",
+                "shift_pct": "Change in share (percentage points)",
+            },
             color="shift_pct",
             color_continuous_scale=["blue", "lightgrey", "red"],
             color_continuous_midpoint=0,

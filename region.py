@@ -26,18 +26,26 @@ st.set_page_config(page_title="EIA Demand by Region (ET)", layout="wide")
 st.title("U.S. Electricity Demand by Region")
 st.caption("Data: U.S. Energy Information Administration (EIA), served from BigQuery")
 st.markdown("**Team:** Aileen Yang · Aria Kovalovich · Chengpu Deng")
+st.info(
+    "Use this page to compare electricity demand across regions and identify unusual "
+    "high- or low-demand days for a selected region."
+)
 
 with st.sidebar:
-    st.header("Settings")
+    st.header("Controls")
 
+    st.subheader("Date range")
     start = st.text_input("Start date (YYYY-MM-DD)", value=default_start.isoformat())
     end = st.text_input("End date (YYYY-MM-DD)", value=default_end.isoformat())
+
+    st.divider()
+    st.subheader("Display options")
     units = st.radio("Units", ["MWh", "GWh"], horizontal=True)
-    top_n = st.slider("Show top N regions (by total)", 1, 20, 10)
+    top_n = st.slider("Number of regions to show", 1, 20, 10)
     chart_type = st.radio("Chart type", ["Line", "Stacked Area"], index=0)
 
     st.divider()
-    st.subheader("Anomaly Detection")
+    st.subheader("Analysis settings")
     z_threshold = st.slider(
         "Z-score threshold",
         min_value=0.5,
@@ -100,7 +108,11 @@ df, ycol, ylabel = convert_units(df, units)
 # ---------------------------
 # Section 1: Regional demand chart
 # ---------------------------
-st.subheader("Electricity Demand by Region")
+st.divider()
+st.subheader("1. Electricity demand by region")
+st.caption(
+    "Compare demand across balancing authorities or regions over the selected date range."
+)
 
 df_top = top_n_by_total(df, "respondent", ycol, top_n=top_n)
 df_sorted = df_top.sort_values("period")
@@ -145,8 +157,10 @@ st.markdown(
 )
 
 with st.container(border=True):
-    st.subheader("Regional Demand Anomalies")
-    st.caption("Select a region — both charts below update together.")
+    st.subheader("2. Regional demand anomalies")
+    st.caption(
+        "Select one region to flag unusually high- or low-demand days using the z-score threshold in the sidebar."
+    )
 
     regions = sorted(df["respondent"].dropna().unique().tolist())
     selected_region = st.selectbox(
@@ -183,7 +197,7 @@ with st.container(border=True):
                     x=high_days["period"],
                     y=high_days["total_demand"],
                     mode="markers",
-                    name="High anomaly",
+                    name="High-demand day",
                     marker=dict(color="red", size=10, symbol="triangle-up"),
                 )
             )
@@ -193,7 +207,7 @@ with st.container(border=True):
                     x=low_days["period"],
                     y=low_days["total_demand"],
                     mode="markers",
-                    name="Low anomaly",
+                    name="Low-demand day",
                     marker=dict(color="blue", size=10, symbol="triangle-down"),
                 )
             )
@@ -208,8 +222,8 @@ with st.container(border=True):
 
         col1, col2, col3 = st.columns(3)
         col1.metric("Days analyzed", len(daily))
-        col2.metric("High anomaly days", (daily["anomaly_type"] == "high").sum())
-        col3.metric("Low anomaly days", (daily["anomaly_type"] == "low").sum())
+        col2.metric("High-demand days", (daily["anomaly_type"] == "high").sum())
+        col3.metric("Low-demand days", (daily["anomaly_type"] == "low").sum())
 
         fig3 = px.bar(
             daily,
@@ -227,7 +241,9 @@ with st.container(border=True):
 # ---------------------------
 # Section 3: Cross-region comparison on a selected date
 # ---------------------------
-st.subheader("Cross-Region Demand Snapshot")
+st.divider()
+st.subheader("3. Cross-region demand snapshot")
+st.caption("Pick one date to compare total demand across all available regions.")
 
 available_dates = sorted(df["period"].dt.strftime("%Y-%m-%d").unique().tolist())
 if available_dates:

@@ -22,6 +22,11 @@ st.set_page_config(page_title="EIA Fuel Type Demand", layout="wide")
 st.title("U.S. Electricity Demand by Fuel Type")
 st.caption("Data: U.S. Energy Information Administration (EIA), served from BigQuery")
 st.markdown("**Team:** Aileen Yang · Aria Kovalovich · Chengpu Deng")
+st.info(
+    "Use this page to see how electricity demand varies by fuel type over time. "
+    "The line view is useful for comparing trends, while the stacked area view helps show "
+    "how the overall generation mix changes."
+)
 
 # -------------------
 # Sidebar Control
@@ -95,6 +100,8 @@ agg_sorted = build_main_chart_data(df, ycol, top_n)
 # Plot Graph (Main Demand)
 # -------------------
 st.subheader("Electricity Demand by Fuel Type")
+st.subheader("1. Electricity demand by fuel type")
+st.caption("Compare demand across major fuel sources over the selected date range.")
 
 if chart_type == "Stacked Area":
     fig = px.area(
